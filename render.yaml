@@ -1,0 +1,21 @@
+# Render "Blueprint": tells Render how to run this repo. Render reads it when you click
+# New → Blueprint and pick this repo. Secrets are not in here: Render asks for them.
+services:
+  - type: web
+    name: daily-budget-api
+    runtime: docker
+    plan: free
+    region: singapore          # closest Render region to Cambodia
+    healthCheckPath: /actuator/health
+    autoDeploy: true           # every push to main redeploys
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true    # Render makes a random secret for you
+      - key: DATABASE_URL      # from Neon, e.g. jdbc:postgresql://ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+        sync: false
+      - key: DATABASE_USERNAME
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: REGISTRATION_ENABLED
+        value: "true"          # set to "false" after you create your account
