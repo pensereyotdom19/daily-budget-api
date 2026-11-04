@@ -59,6 +59,8 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**", "/actuator/health").permitAll()
+                // Spring's error page, so a refused request shows its real reason (e.g. 413) instead of 401.
+                .requestMatchers("/error").permitAll()
                 .requestMatchers(HttpMethod.GET, DASHBOARD_FILES).permitAll()
                 .anyRequest().authenticated())
             .headers(h -> h
