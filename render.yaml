@@ -18,4 +18,4 @@ services:
       - key: DATABASE_PASSWORD
         sync: false
       - key: REGISTRATION_ENABLED
-        value: "true"          # set to "false" after you create your account
+        value: "false"         # sign-ups closed: your account exists. Set "true" briefly to add another.
