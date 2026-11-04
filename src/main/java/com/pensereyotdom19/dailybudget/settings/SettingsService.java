@@ -31,6 +31,10 @@ public class SettingsService {
         s.update(r.startMonth(), r.monthCount(), r.totalCents(), r.livingMonthlyCents(),
             r.engagementCents(), r.firstOpenedAt(), clock.instant());
         s.updateHistory(r.historyStartMonth(), r.savedBeforeCents());
+        // Older app versions don't send limits: null keeps what is saved. An empty object {} clears them.
+        if (r.categoryLimits() != null) {
+            s.setCategoryLimits(CategoryLimits.toJson(r.categoryLimits()));
+        }
         return SettingsResponse.from(repo.save(s));
     }
 

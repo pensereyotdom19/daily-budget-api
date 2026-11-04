@@ -22,18 +22,21 @@ public class AuthService {
     private final Clock clock;
     private final boolean registrationEnabled;
     private final LoginThrottle throttle;
+    private final TokenVersionCheck versionCheck;
     /** A real bcrypt hash of a random password, checked when the email is unknown, so a wrong email
      *  takes as long as a wrong password and nobody can tell which emails have accounts. */
     private final String dummyHash;
 
     public AuthService(AppUserRepository users, PasswordEncoder passwordEncoder, TokenService tokens, Clock clock,
-                       @Value("${app.registration-enabled}") boolean registrationEnabled, LoginThrottle throttle) {
+                       @Value("${app.registration-enabled}") boolean registrationEnabled, LoginThrottle throttle,
+                       TokenVersionCheck versionCheck) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.tokens = tokens;
         this.clock = clock;
         this.registrationEnabled = registrationEnabled;
         this.throttle = throttle;
+        this.versionCheck = versionCheck;
         this.dummyHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
@@ -67,8 +70,18 @@ public class AuthService {
         return token(found.get());
     }
 
+    /**
+     * Sign out everywhere: raises the user's token version, so every token made before now gets 401.
+     * Not one transaction around everything on purpose: the UPDATE commits first, then this server's
+     * memory of the version is updated, so no request can read the old number back in between.
+     */
+    public void logoutAll(UUID userId) {
+        users.bumpTokenVersion(userId);
+        users.findTokenVersionById(userId).ifPresent(v -> versionCheck.remember(userId, v));
+    }
+
     private TokenResponse token(AppUser user) {
-        TokenService.IssuedToken t = tokens.issue(user.getId());
+        TokenService.IssuedToken t = tokens.issue(user.getId(), user.getTokenVersion());
         return new TokenResponse(t.value(), t.expiresAt(), user.getId());
     }
 

@@ -37,7 +37,8 @@ curl "localhost:8080/api/expenses/months/2026-11?zone=Asia/Phnom_Penh" -H "Autho
 |---|---|---|
 | POST | `/api/auth/register` | Create an account, returns a token |
 | POST | `/api/auth/login` | Log in, returns a token |
-| GET / PUT | `/api/settings` | Read / save the 6-month plan |
+| POST | `/api/auth/logout-all` | Sign out everywhere (needs a token): every token made so far stops working, 204 |
+| GET / PUT | `/api/settings` | Read / save the 6-month plan, including optional `categoryLimits` (`{"coffee":1500}`, cents) |
 | GET | `/api/bills` | All bills |
 | PUT / DELETE | `/api/bills/{id}` | Save / delete one bill |
 | GET | `/api/expenses?from=…&to=…` | Expenses between two times, newest first |
@@ -82,6 +83,7 @@ Entity       a Java class that maps to one table row
 - **Passwords**: only a BCrypt hash is saved.
 - **Migrations**: the database structure lives in versioned SQL files, so every computer and server builds it the same way.
 - **Idempotent PUT with client ids**: the phone makes the UUID, so retrying a request on bad internet never creates duplicates.
+- **Sign out everywhere with a token version**: a JWT can't be recalled, so each one carries the user's `token_version` ("ver"). Raising that number makes every older token fail the check in `TokenVersionCheck`.
 - **Soft delete + sync**: deleted rows keep a `deleted_at` time, so other devices can learn about the deletion.
 
 ## Deploying (free)

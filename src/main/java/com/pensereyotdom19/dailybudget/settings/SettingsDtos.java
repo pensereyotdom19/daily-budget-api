@@ -6,7 +6,9 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.util.Map;
 
 public final class SettingsDtos {
     private SettingsDtos() {}
@@ -19,17 +21,22 @@ public final class SettingsDtos {
         @PositiveOrZero long engagementCents,
         Instant firstOpenedAt,
         @Pattern(regexp = MonthKey.PATTERN) String historyStartMonth,
-        @PositiveOrZero Long savedBeforeCents) {}
+        @PositiveOrZero Long savedBeforeCents,
+        // Optional: {"coffee":1500,"food":3000}. The annotations inside <...> check every key and value.
+        @Size(max = CategoryLimits.MAX_ENTRIES)
+        Map<@NotNull @Pattern(regexp = CategoryLimits.ALLOWED_KEYS) String,
+            @NotNull @Min(0) @Max(CategoryLimits.MAX_CENTS) Long> categoryLimits) {}
 
     public record SettingsResponse(
         String startMonth, int monthCount, long totalCents, long livingMonthlyCents,
         long engagementCents, Instant firstOpenedAt, String historyStartMonth, long savedBeforeCents,
-        Instant updatedAt) {
+        Map<String, Long> categoryLimits, Instant updatedAt) {
 
         static SettingsResponse from(BudgetSettings s) {
             return new SettingsResponse(s.getStartMonth(), s.getMonthCount(), s.getTotalCents(),
                 s.getLivingMonthlyCents(), s.getEngagementCents(), s.getFirstOpenedAt(),
-                s.getHistoryStartMonth(), s.getSavedBeforeCents(), s.getUpdatedAt());
+                s.getHistoryStartMonth(), s.getSavedBeforeCents(),
+                CategoryLimits.fromJson(s.getCategoryLimits()), s.getUpdatedAt());
         }
     }
 }

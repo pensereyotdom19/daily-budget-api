@@ -10,7 +10,10 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 
-/** Makes a signed token whose "subject" is the user's id. */
+/**
+ * Makes a signed token whose "subject" is the user's id. The "ver" claim is the user's token version,
+ * so "sign out everywhere" can make it stop working (see TokenVersionCheck).
+ */
 @Service
 public class TokenService {
     static final String ISSUER = "daily-budget-api";
@@ -24,7 +27,7 @@ public class TokenService {
         this.clock = clock;
     }
 
-    public IssuedToken issue(UUID userId) {
+    public IssuedToken issue(UUID userId, int tokenVersion) {
         Instant now = clock.instant();
         Instant expires = now.plus(props.ttl());
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -32,6 +35,7 @@ public class TokenService {
             .subject(userId.toString())
             .issuedAt(now)
             .expiresAt(expires)
+            .claim(TokenVersionCheck.CLAIM, tokenVersion)
             .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
         String value = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();

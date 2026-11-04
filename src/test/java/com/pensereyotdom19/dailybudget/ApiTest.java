@@ -368,6 +368,171 @@ class ApiTest {
         mvc.perform(get("/api/bills").header("Authorization", "Bearer " + token)).andExpect(status().isUnauthorized());
     }
 
+    // ---------- sign out everywhere ----------
+
+    private String login(String email) throws Exception {
+        String body = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"" + email + "\",\"password\":\"correct horse battery\"}"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        return "Bearer " + JsonPath.read(body, "$.token");
+    }
+
+    /** A token signed with the test key, like TokenService makes, but with any "ver" (null = no claim). */
+    private static String handMadeToken(UUID userId, Integer ver) {
+        var key = new javax.crypto.spec.SecretKeySpec(
+            "test-secret-0123456789abcdef0123456789abcdef".getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256");
+        var encoder = new org.springframework.security.oauth2.jwt.NimbusJwtEncoder(
+            new com.nimbusds.jose.jwk.source.ImmutableSecret<>(key));
+        var now = java.time.Instant.now();
+        var claims = org.springframework.security.oauth2.jwt.JwtClaimsSet.builder()
+            .issuer("daily-budget-api").subject(userId.toString())
+            .issuedAt(now).expiresAt(now.plusSeconds(600));
+        if (ver != null) claims.claim("ver", ver);
+        var header = org.springframework.security.oauth2.jwt.JwsHeader.with(
+            org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS256).build();
+        return "Bearer " + encoder.encode(org.springframework.security.oauth2.jwt.JwtEncoderParameters.from(header, claims.build()))
+            .getTokenValue();
+    }
+
+    private static UUID userIdOf(String bearer) {
+        String payload = bearer.substring("Bearer ".length()).split("\\.")[1];
+        String json = new String(java.util.Base64.getUrlDecoder().decode(payload), java.nio.charset.StandardCharsets.UTF_8);
+        return UUID.fromString(JsonPath.read(json, "$.sub"));
+    }
+
+    @Test
+    void signOutEverywhereEndsEveryOldTokenAndANewLoginWorks() throws Exception {
+        String email = unique();
+        String phone = register(email);
+        String laptop = login(email);
+        mvc.perform(get("/api/sync").header("Authorization", phone)).andExpect(status().isOk());
+        mvc.perform(get("/api/sync").header("Authorization", laptop)).andExpect(status().isOk());
+
+        mvc.perform(post("/api/auth/logout-all").header("Authorization", laptop)).andExpect(status().isNoContent());
+
+        // Both old tokens stop working at once, also the one that asked.
+        mvc.perform(get("/api/sync").header("Authorization", phone)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/sync").header("Authorization", laptop)).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/auth/logout-all").header("Authorization", laptop)).andExpect(status().isUnauthorized());
+
+        String fresh = login(email);
+        mvc.perform(get("/api/sync").header("Authorization", fresh)).andExpect(status().isOk());
+    }
+
+    @Test
+    void tokensWithTheCurrentVersionKeepWorking() throws Exception {
+        String email = unique();
+        String first = register(email);
+        String second = login(email);
+        // Many requests in a row (the version is remembered for a while) keep working.
+        for (int i = 0; i < 3; i++) {
+            mvc.perform(get("/api/sync").header("Authorization", first)).andExpect(status().isOk());
+            mvc.perform(get("/api/bills").header("Authorization", second)).andExpect(status().isOk());
+        }
+        // Tokens made before "ver" existed count as version 0, which is every user's starting version.
+        UUID userId = userIdOf(first);
+        mvc.perform(get("/api/sync").header("Authorization", handMadeToken(userId, null))).andExpect(status().isOk());
+        mvc.perform(get("/api/sync").header("Authorization", handMadeToken(userId, 0))).andExpect(status().isOk());
+        mvc.perform(get("/api/sync").header("Authorization", handMadeToken(userId, 1))).andExpect(status().isUnauthorized());
+
+        mvc.perform(post("/api/auth/logout-all").header("Authorization", first)).andExpect(status().isNoContent());
+        mvc.perform(get("/api/sync").header("Authorization", handMadeToken(userId, null))).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/sync").header("Authorization", handMadeToken(userId, 1))).andExpect(status().isOk());
+    }
+
+    @Test
+    void tokensOfUnknownUsersAreRefused() throws Exception {
+        mvc.perform(get("/api/sync").header("Authorization", handMadeToken(UUID.randomUUID(), 0)))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void signOutEverywhereNeedsAToken() throws Exception {
+        mvc.perform(post("/api/auth/logout-all")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/auth/logout-all").header("Authorization", "Bearer not-a-real-token"))
+            .andExpect(status().isUnauthorized());
+        // Login and register are still open.
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"" + unique() + "\",\"password\":\"whatever12345\"}"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.detail").value("Wrong email or password"));
+    }
+
+    // ---------- category limits ----------
+
+    private static String plan(String extra) {
+        return "{\"startMonth\":\"2026-11\",\"monthCount\":6,\"totalCents\":470000,"
+            + "\"livingMonthlyCents\":9200,\"engagementCents\":150000" + (extra == null ? "" : "," + extra) + "}";
+    }
+
+    private org.springframework.test.web.servlet.ResultActions putPlan(String token, String extra) throws Exception {
+        return mvc.perform(put("/api/settings").header("Authorization", token)
+            .contentType(MediaType.APPLICATION_JSON).content(plan(extra)));
+    }
+
+    @Test
+    void categoryLimitsAreSavedKeptWhenLeftOutAndClearedByAnEmptyObject() throws Exception {
+        String token = register(unique());
+        putPlan(token, null).andExpect(status().isOk()).andExpect(jsonPath("$.categoryLimits").isMap())
+            .andExpect(jsonPath("$.categoryLimits.length()").value(0));
+
+        putPlan(token, "\"categoryLimits\":{\"coffee\":1500,\"food\":3000,\"skinCare\":0}")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.categoryLimits.coffee").value(1500));
+        mvc.perform(get("/api/settings").header("Authorization", token))
+            .andExpect(jsonPath("$.categoryLimits.coffee").value(1500))
+            .andExpect(jsonPath("$.categoryLimits.food").value(3000))
+            .andExpect(jsonPath("$.categoryLimits.skinCare").value(0));
+
+        // An older app leaves the field out (or sends null): the limits stay.
+        putPlan(token, null).andExpect(status().isOk()).andExpect(jsonPath("$.categoryLimits.coffee").value(1500));
+        putPlan(token, "\"categoryLimits\":null").andExpect(status().isOk())
+            .andExpect(jsonPath("$.categoryLimits.food").value(3000));
+
+        // {} clears them.
+        putPlan(token, "\"categoryLimits\":{}").andExpect(status().isOk())
+            .andExpect(jsonPath("$.categoryLimits").isMap())
+            .andExpect(jsonPath("$.categoryLimits.length()").value(0));
+        mvc.perform(get("/api/settings").header("Authorization", token))
+            .andExpect(jsonPath("$.categoryLimits.length()").value(0));
+    }
+
+    @Test
+    void badCategoryLimitsAreRefused() throws Exception {
+        String token = register(unique());
+        putPlan(token, "\"categoryLimits\":{\"bills\":100}").andExpect(status().isBadRequest());
+        putPlan(token, "\"categoryLimits\":{\"engagement\":100}").andExpect(status().isBadRequest());
+        putPlan(token, "\"categoryLimits\":{\"casino\":100}").andExpect(status().isBadRequest());
+        putPlan(token, "\"categoryLimits\":{\"coffee\":-1}").andExpect(status().isBadRequest());
+        putPlan(token, "\"categoryLimits\":{\"coffee\":100000001}").andExpect(status().isBadRequest());
+        putPlan(token, "\"categoryLimits\":{\"coffee\":null}").andExpect(status().isBadRequest());
+        putPlan(token, "\"categoryLimits\":[1500]").andExpect(status().isBadRequest());
+        putPlan(token, "\"categoryLimits\":{\"coffee\":100000000}").andExpect(status().isOk());
+
+        // More than 20 entries. Only 10 keys are allowed, so JSON with repeated keys is the only way to send
+        // 21; check the size rule directly on the request record instead.
+        var many = new java.util.HashMap<String, Long>();
+        for (int i = 0; i < 21; i++) many.put("k" + i, 1L);
+        var request = new com.pensereyotdom19.dailybudget.settings.SettingsDtos.SettingsRequest(
+            "2026-11", 6, 470000, 9200, 150000, null, null, null, many);
+        var violations = jakarta.validation.Validation.buildDefaultValidatorFactory().getValidator().validate(request);
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("categoryLimits")
+            && v.getConstraintDescriptor().getAnnotation() instanceof jakarta.validation.constraints.Size);
+    }
+
+    @Test
+    void syncIncludesCategoryLimits() throws Exception {
+        String token = register(unique());
+        putPlan(token, null).andExpect(status().isOk());
+        mvc.perform(get("/api/sync").header("Authorization", token))
+            .andExpect(jsonPath("$.settings.categoryLimits").isMap())
+            .andExpect(jsonPath("$.settings.categoryLimits.length()").value(0));
+        putPlan(token, "\"categoryLimits\":{\"fun\":2500}").andExpect(status().isOk());
+        mvc.perform(get("/api/sync").header("Authorization", token))
+            .andExpect(jsonPath("$.settings.categoryLimits.fun").value(2500));
+    }
+
     private void putExpense(String token, UUID id, long cents, String category, String at,
                             String billId, String billMonth) throws Exception {
         mvc.perform(put("/api/expenses/" + id).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)

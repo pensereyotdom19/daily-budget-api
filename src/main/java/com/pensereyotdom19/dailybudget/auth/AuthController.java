@@ -5,6 +5,8 @@ import com.pensereyotdom19.dailybudget.auth.AuthDtos.TokenResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,5 +34,12 @@ public class AuthController {
     public TokenResponse login(@Valid @RequestBody Credentials body, HttpServletRequest request) {
         // Behind Render's proxy this is the visitor's real address (server.forward-headers-strategy=native).
         return auth.login(body, request.getRemoteAddr());
+    }
+
+    /** POST /api/auth/logout-all (needs a token) → 204. Every token of this user stops working, this one too. */
+    @PostMapping("/logout-all")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logoutAll(@AuthenticationPrincipal Jwt jwt) {
+        auth.logoutAll(CurrentUser.id(jwt));
     }
 }

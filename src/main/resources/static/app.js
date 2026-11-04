@@ -190,6 +190,37 @@
     showLogin();
   }
 
+  // Sign out on every device: the server raises a number that every older token carries,
+  // so all of them (the phone's too) stop working. Then this tab signs out as well.
+  async function onLogoutAll() {
+    const ok = window.confirm("Sign out on every device, including your phone? You'll need to sign in again on each.");
+    if (!ok) return;
+    const token = getToken();
+    if (!token) {
+      showLogin('Please sign in.');
+      return;
+    }
+    const button = $('logout-all-button');
+    button.disabled = true;
+    try {
+      const res = await fetch('/api/auth/logout-all', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      if (res.status === 204 || res.status === 401) {
+        // 401: this token had already stopped working, so the result is the same.
+        clearToken();
+        showLogin('Signed out on every device.');
+        return;
+      }
+      $('dash-status').textContent = 'Could not sign out everywhere (error ' + res.status + ').';
+    } catch (e) {
+      $('dash-status').textContent = 'Could not reach the server. Try again.';
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   // ---------- loading ----------
 
   async function load() {
@@ -489,6 +520,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     $('login-form').addEventListener('submit', onLogin);
     $('logout-button').addEventListener('click', onLogout);
+    $('logout-all-button').addEventListener('click', onLogoutAll);
     $('refresh-button').addEventListener('click', load);
     $('category-month').addEventListener('change', loadCategories);
     window.addEventListener('resize', () => {

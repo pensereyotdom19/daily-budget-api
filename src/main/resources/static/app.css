@@ -142,7 +142,7 @@ select option { background: #11131c; }
   flex-wrap: wrap;
   margin-bottom: 6px;
 }
-.top-actions { display: flex; gap: 8px; }
+.top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 #dash-status { min-height: 1.2em; margin: 0 0 12px; }
 
 .card-head {

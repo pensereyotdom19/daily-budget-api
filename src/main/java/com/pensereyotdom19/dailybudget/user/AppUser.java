@@ -24,6 +24,10 @@ public class AppUser {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    /** Goes up by one on "sign out everywhere". Tokens made with an older number stop working. */
+    @Column(name = "token_version", nullable = false)
+    private int tokenVersion;
+
     protected AppUser() {} // JPA needs an empty constructor
 
     public AppUser(UUID id, String email, String passwordHash, Instant createdAt) {
@@ -37,4 +41,5 @@ public class AppUser {
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
     public Instant getCreatedAt() { return createdAt; }
+    public int getTokenVersion() { return tokenVersion; }
 }

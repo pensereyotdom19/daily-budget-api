@@ -12,6 +12,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
@@ -23,7 +24,8 @@ import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWrite
 
 /**
  * Who may call what.
- * - /api/auth/** (register, login) and the health check are open.
+ * - /api/auth/** (register, login) and the health check are open, except /api/auth/logout-all,
+ *   which needs a token (it signs that user out everywhere).
  * - The web dashboard's static files (index.html, app.js, app.css, favicon.svg) are open: they hold
  *   no data. The page logs in and then calls /api with a token, like the phone does.
  * - Everything else needs "Authorization: Bearer <token>" from login.
@@ -58,6 +60,8 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable()) // CSRF protects cookie logins; we use tokens instead
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // Rules are checked top to bottom and the first match wins, so this must come before /api/auth/**.
+                .requestMatchers("/api/auth/logout-all").authenticated()
                 .requestMatchers("/api/auth/**", "/actuator/health").permitAll()
                 // Spring's error page, so a refused request shows its real reason (e.g. 413) instead of 401.
                 .requestMatchers("/error").permitAll()
@@ -86,11 +90,16 @@ public class SecurityConfig {
         return new NimbusJwtEncoder(new ImmutableSecret<>(key));
     }
 
-    /** Checks the signature, expiry and issuer of tokens on every request. */
+    /**
+     * Checks the signature, expiry and issuer of tokens on every request, and then that the token's
+     * version still matches the user's (so "sign out everywhere" works, see TokenVersionCheck).
+     */
     @Bean
-    JwtDecoder jwtDecoder(SecretKey key) {
+    JwtDecoder jwtDecoder(SecretKey key, TokenVersionCheck versionCheck) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
-        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(TokenService.ISSUER));
+        // DelegatingOAuth2TokenValidator runs each check in turn; all must pass.
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+            JwtValidators.createDefaultWithIssuer(TokenService.ISSUER), versionCheck));
         return decoder;
     }
 

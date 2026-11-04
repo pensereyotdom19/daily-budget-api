@@ -35,6 +35,10 @@ public class BudgetSettings {
     @Column(name = "saved_before_cents", nullable = false)
     private long savedBeforeCents;
 
+    /** Spending limit per category as JSON text, e.g. {"coffee":1500}. NULL = none. See CategoryLimits. */
+    @Column(name = "category_limits")
+    private String categoryLimits;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -54,6 +58,9 @@ public class BudgetSettings {
     public String getHistoryStartMonth() { return historyStartMonth; }
     public long getSavedBeforeCents() { return savedBeforeCents; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public String getCategoryLimits() { return categoryLimits; }
+
+    public void setCategoryLimits(String json) { this.categoryLimits = json; }
 
     /** Older app versions don't send these; null keeps what is saved. */
     public void updateHistory(String historyStartMonth, Long savedBeforeCents) {
