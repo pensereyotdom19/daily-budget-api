@@ -30,6 +30,7 @@ public class SettingsService {
         BudgetSettings s = repo.findById(userId).orElseGet(() -> new BudgetSettings(userId));
         s.update(r.startMonth(), r.monthCount(), r.totalCents(), r.livingMonthlyCents(),
             r.engagementCents(), r.firstOpenedAt(), clock.instant());
+        s.updateHistory(r.historyStartMonth(), r.savedBeforeCents());
         return SettingsResponse.from(repo.save(s));
     }
 

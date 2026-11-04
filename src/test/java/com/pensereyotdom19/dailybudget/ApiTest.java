@@ -234,6 +234,81 @@ class ApiTest {
         assertThat((String) JsonPath.read(second, "$.serverTime")).isGreaterThan(since);
     }
 
+    @Test
+    void incomesAndRecurringExpensesSyncIncludingDeletions() throws Exception {
+        String token = register(unique());
+        UUID gift = UUID.randomUUID();
+        UUID topUp = UUID.randomUUID();
+        mvc.perform(put("/api/incomes/" + gift).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"amountCents":2000,"target":"savings","note":" Gift ","receivedAt":"2026-11-04T03:00:00Z"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.note").value("Gift"));
+        mvc.perform(put("/api/recurring/" + topUp).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"amountCents":500,"category":"phone","note":"Top-up","dayOfMonth":5,
+                     "startMonth":"2026-11","lastAddedMonth":"2026-11","active":true}
+                    """))
+            .andExpect(status().isOk());
+
+        String first = mvc.perform(get("/api/sync").header("Authorization", token))
+            .andExpect(jsonPath("$.incomes.length()").value(1))
+            .andExpect(jsonPath("$.incomes[0].target").value("savings"))
+            .andExpect(jsonPath("$.recurring.length()").value(1))
+            .andExpect(jsonPath("$.recurring[0].lastAddedMonth").value("2026-11"))
+            .andExpect(jsonPath("$.recurring[0].category").value("phone"))
+            .andReturn().getResponse().getContentAsString();
+        String since = JsonPath.read(first, "$.serverTime");
+
+        Thread.sleep(5);
+        mvc.perform(delete("/api/incomes/" + gift).header("Authorization", token)).andExpect(status().isNoContent());
+        mvc.perform(get("/api/sync").header("Authorization", token).param("since", since))
+            .andExpect(jsonPath("$.incomes.length()").value(1))
+            .andExpect(jsonPath("$.incomes[0].deleted").value(true))
+            .andExpect(jsonPath("$.recurring.length()").value(0));
+    }
+
+    @Test
+    void badIncomeTargetsAndDaysAreRefusedAndOthersCannotSeeThem() throws Exception {
+        String token = register(unique());
+        String other = register(unique());
+        UUID id = UUID.randomUUID();
+        mvc.perform(put("/api/incomes/" + id).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"amountCents\":100,\"target\":\"casino\",\"note\":\"\",\"receivedAt\":\"2026-11-04T03:00:00Z\"}"))
+            .andExpect(status().isBadRequest());
+        mvc.perform(put("/api/recurring/" + id).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"amountCents\":100,\"category\":\"food\",\"note\":\"\",\"dayOfMonth\":32,\"startMonth\":\"2026-11\",\"active\":true}"))
+            .andExpect(status().isBadRequest());
+        mvc.perform(put("/api/incomes/" + id).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"amountCents\":100,\"target\":\"living\",\"note\":\"\",\"receivedAt\":\"2026-11-04T03:00:00Z\"}"))
+            .andExpect(status().isOk());
+        mvc.perform(get("/api/incomes").header("Authorization", other)).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(delete("/api/incomes/" + id).header("Authorization", other)).andExpect(status().isNotFound());
+        mvc.perform(put("/api/incomes/" + id).header("Authorization", other).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"amountCents\":1,\"target\":\"living\",\"note\":\"\",\"receivedAt\":\"2026-11-04T03:00:00Z\"}"))
+            .andExpect(status().isConflict());
+    }
+
+    @Test
+    void planHistoryIsSavedAndKeptWhenAnOlderAppLeavesItOut() throws Exception {
+        String token = register(unique());
+        mvc.perform(put("/api/settings").header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"startMonth":"2027-05","monthCount":6,"totalCents":470000,"livingMonthlyCents":9200,
+                     "engagementCents":150000,"historyStartMonth":"2026-11","savedBeforeCents":12345}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.savedBeforeCents").value(12345));
+        mvc.perform(put("/api/settings").header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"startMonth":"2027-05","monthCount":6,"totalCents":480000,"livingMonthlyCents":9200,"engagementCents":150000}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.historyStartMonth").value("2026-11"))
+            .andExpect(jsonPath("$.savedBeforeCents").value(12345));
+    }
+
     private void putExpense(String token, UUID id, long cents, String category, String at,
                             String billId, String billMonth) throws Exception {
         mvc.perform(put("/api/expenses/" + id).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)

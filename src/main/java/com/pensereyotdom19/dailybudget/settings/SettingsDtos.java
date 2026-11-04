@@ -17,15 +17,19 @@ public final class SettingsDtos {
         @PositiveOrZero long totalCents,
         @PositiveOrZero long livingMonthlyCents,
         @PositiveOrZero long engagementCents,
-        Instant firstOpenedAt) {}
+        Instant firstOpenedAt,
+        @Pattern(regexp = MonthKey.PATTERN) String historyStartMonth,
+        @PositiveOrZero Long savedBeforeCents) {}
 
     public record SettingsResponse(
         String startMonth, int monthCount, long totalCents, long livingMonthlyCents,
-        long engagementCents, Instant firstOpenedAt, Instant updatedAt) {
+        long engagementCents, Instant firstOpenedAt, String historyStartMonth, long savedBeforeCents,
+        Instant updatedAt) {
 
         static SettingsResponse from(BudgetSettings s) {
             return new SettingsResponse(s.getStartMonth(), s.getMonthCount(), s.getTotalCents(),
-                s.getLivingMonthlyCents(), s.getEngagementCents(), s.getFirstOpenedAt(), s.getUpdatedAt());
+                s.getLivingMonthlyCents(), s.getEngagementCents(), s.getFirstOpenedAt(),
+                s.getHistoryStartMonth(), s.getSavedBeforeCents(), s.getUpdatedAt());
         }
     }
 }

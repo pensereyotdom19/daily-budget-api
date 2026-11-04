@@ -5,6 +5,10 @@ import com.pensereyotdom19.dailybudget.bill.BillDtos.BillResponse;
 import com.pensereyotdom19.dailybudget.bill.BillService;
 import com.pensereyotdom19.dailybudget.expense.ExpenseDtos.ExpenseResponse;
 import com.pensereyotdom19.dailybudget.expense.ExpenseService;
+import com.pensereyotdom19.dailybudget.income.IncomeDtos.IncomeResponse;
+import com.pensereyotdom19.dailybudget.income.IncomeService;
+import com.pensereyotdom19.dailybudget.recurring.RecurringDtos.RecurringResponse;
+import com.pensereyotdom19.dailybudget.recurring.RecurringService;
 import com.pensereyotdom19.dailybudget.settings.SettingsDtos.SettingsResponse;
 import com.pensereyotdom19.dailybudget.settings.SettingsService;
 import java.time.Clock;
@@ -29,12 +33,17 @@ public class SyncController {
     private final SettingsService settings;
     private final BillService bills;
     private final ExpenseService expenses;
+    private final IncomeService incomes;
+    private final RecurringService recurring;
     private final Clock clock;
 
-    public SyncController(SettingsService settings, BillService bills, ExpenseService expenses, Clock clock) {
+    public SyncController(SettingsService settings, BillService bills, ExpenseService expenses,
+                          IncomeService incomes, RecurringService recurring, Clock clock) {
         this.settings = settings;
         this.bills = bills;
         this.expenses = expenses;
+        this.incomes = incomes;
+        this.recurring = recurring;
         this.clock = clock;
     }
 
@@ -46,9 +55,12 @@ public class SyncController {
         return new Changes(serverTime,
             settings.changedSince(userId, since).orElse(null),
             bills.changedSince(userId, since),
-            expenses.changedSince(userId, since));
+            expenses.changedSince(userId, since),
+            incomes.changedSince(userId, since),
+            recurring.changedSince(userId, since));
     }
 
     public record Changes(Instant serverTime, SettingsResponse settings,
-                          List<BillResponse> bills, List<ExpenseResponse> expenses) {}
+                          List<BillResponse> bills, List<ExpenseResponse> expenses,
+                          List<IncomeResponse> incomes, List<RecurringResponse> recurring) {}
 }
