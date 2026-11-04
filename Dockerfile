@@ -1,5 +1,5 @@
 # Step 1: build the .jar with the full JDK.
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:25-jdk AS build
 WORKDIR /app
 COPY .mvn .mvn
 COPY mvnw pom.xml ./
@@ -8,7 +8,7 @@ COPY src src
 RUN ./mvnw -q -DskipTests package
 
 # Step 2: run it with only the small Java runtime.
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 WORKDIR /app
 COPY --from=build /app/target/daily-budget-api-*.jar app.jar
 ENV SPRING_PROFILES_ACTIVE=prod
