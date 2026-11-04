@@ -309,6 +309,65 @@ class ApiTest {
             .andExpect(jsonPath("$.savedBeforeCents").value(12345));
     }
 
+    @Test
+    void fiveWrongPasswordsLockTheAccountForAWhile() throws Exception {
+        String email = unique();
+        register(email);
+        String wrong = "{\"email\":\"" + email + "\",\"password\":\"wrong password!!\"}";
+        String right = "{\"email\":\"" + email + "\",\"password\":\"correct horse battery\"}";
+        for (int i = 0; i < 5; i++) {
+            mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(wrong)
+                    .with(r -> { r.setRemoteAddr("10.9.0." + 1); return r; }))
+                .andExpect(status().isUnauthorized());
+        }
+        // Even the right password waits now, from any address.
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(right)
+                .with(r -> { r.setRemoteAddr("10.9.0.2"); return r; }))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(header().exists("Retry-After"))
+            .andExpect(jsonPath("$.detail").value(Matchers.startsWith("Too many attempts")));
+    }
+
+    @Test
+    void unknownEmailsGetTheSameAnswerAsWrongPasswords() throws Exception {
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"" + unique() + "\",\"password\":\"whatever12345\"}"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.detail").value("Wrong email or password"));
+    }
+
+    @Test
+    void hugeRequestsAreRefusedBeforeTheyAreRead() throws Exception {
+        String big = "{\"email\":\"a@b.co\",\"password\":\"" + "x".repeat(70_000) + "\"}";
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(big))
+            .andExpect(status().isPayloadTooLarge());
+    }
+
+    @Test
+    void httpsRepliesTellBrowsersToStayOnHttps() throws Exception {
+        mvc.perform(get("/").secure(true))
+            .andExpect(header().string("Strict-Transport-Security", Matchers.containsString("max-age=31536000")))
+            .andExpect(header().string("Permissions-Policy", Matchers.containsString("camera=()")));
+    }
+
+    @Test
+    void tokensFromAnotherIssuerAreRefused() throws Exception {
+        // Signed with the right key but claiming another issuer.
+        var key = new javax.crypto.spec.SecretKeySpec(
+            "test-secret-0123456789abcdef0123456789abcdef".getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256");
+        var encoder = new org.springframework.security.oauth2.jwt.NimbusJwtEncoder(
+            new com.nimbusds.jose.jwk.source.ImmutableSecret<>(key));
+        var now = java.time.Instant.now();
+        var claims = org.springframework.security.oauth2.jwt.JwtClaimsSet.builder()
+            .issuer("someone-else").subject(UUID.randomUUID().toString())
+            .issuedAt(now).expiresAt(now.plusSeconds(600)).build();
+        var header = org.springframework.security.oauth2.jwt.JwsHeader.with(
+            org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS256).build();
+        String token = encoder.encode(org.springframework.security.oauth2.jwt.JwtEncoderParameters.from(header, claims))
+            .getTokenValue();
+        mvc.perform(get("/api/bills").header("Authorization", "Bearer " + token)).andExpect(status().isUnauthorized());
+    }
+
     private void putExpense(String token, UUID id, long cents, String category, String at,
                             String billId, String billMonth) throws Exception {
         mvc.perform(put("/api/expenses/" + id).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)

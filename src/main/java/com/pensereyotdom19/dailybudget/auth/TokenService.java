@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 /** Makes a signed token whose "subject" is the user's id. */
 @Service
 public class TokenService {
+    static final String ISSUER = "daily-budget-api";
     private final JwtEncoder encoder;
     private final JwtProperties props;
     private final Clock clock;
@@ -27,7 +28,7 @@ public class TokenService {
         Instant now = clock.instant();
         Instant expires = now.plus(props.ttl());
         JwtClaimsSet claims = JwtClaimsSet.builder()
-            .issuer("daily-budget-api")
+            .issuer(ISSUER)
             .subject(userId.toString())
             .issuedAt(now)
             .expiresAt(expires)

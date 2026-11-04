@@ -2,6 +2,7 @@ package com.pensereyotdom19.dailybudget.auth;
 
 import com.pensereyotdom19.dailybudget.auth.AuthDtos.Credentials;
 import com.pensereyotdom19.dailybudget.auth.AuthDtos.TokenResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,13 +23,14 @@ public class AuthController {
     /** POST /api/auth/register {"email": "...", "password": "..."} → 201 with a token. */
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    public TokenResponse register(@Valid @RequestBody Credentials body) {
-        return auth.register(body);
+    public TokenResponse register(@Valid @RequestBody Credentials body, HttpServletRequest request) {
+        return auth.register(body, request.getRemoteAddr());
     }
 
     /** POST /api/auth/login {"email": "...", "password": "..."} → 200 with a token. */
     @PostMapping("/login")
-    public TokenResponse login(@Valid @RequestBody Credentials body) {
-        return auth.login(body);
+    public TokenResponse login(@Valid @RequestBody Credentials body, HttpServletRequest request) {
+        // Behind Render's proxy this is the visitor's real address (server.forward-headers-strategy=native).
+        return auth.login(body, request.getRemoteAddr());
     }
 }

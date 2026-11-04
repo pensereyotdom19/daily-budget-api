@@ -21,18 +21,25 @@ public class AuthService {
     private final TokenService tokens;
     private final Clock clock;
     private final boolean registrationEnabled;
+    private final LoginThrottle throttle;
+    /** A real bcrypt hash of a random password, checked when the email is unknown, so a wrong email
+     *  takes as long as a wrong password and nobody can tell which emails have accounts. */
+    private final String dummyHash;
 
     public AuthService(AppUserRepository users, PasswordEncoder passwordEncoder, TokenService tokens, Clock clock,
-                       @Value("${app.registration-enabled}") boolean registrationEnabled) {
+                       @Value("${app.registration-enabled}") boolean registrationEnabled, LoginThrottle throttle) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.tokens = tokens;
         this.clock = clock;
         this.registrationEnabled = registrationEnabled;
+        this.throttle = throttle;
+        this.dummyHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
     @Transactional
-    public TokenResponse register(Credentials c) {
+    public TokenResponse register(Credentials c, String address) {
+        throttle.checkAndRecordRegistration(address);
         if (!registrationEnabled) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Registration is closed");
         }
@@ -45,12 +52,19 @@ public class AuthService {
     }
 
     @Transactional(readOnly = true)
-    public TokenResponse login(Credentials c) {
-        AppUser user = users.findByEmail(normalize(c.email()))
-            .filter(u -> passwordEncoder.matches(c.password(), u.getPasswordHash()))
+    public TokenResponse login(Credentials c, String address) {
+        String email = normalize(c.email());
+        throttle.checkLogin(email, address);
+        var found = users.findByEmail(email);
+        boolean ok = passwordEncoder.matches(c.password(), found.map(AppUser::getPasswordHash).orElse(dummyHash))
+            && found.isPresent();
+        if (!ok) {
+            throttle.loginFailed(email, address);
             // Same message for "no such email" and "wrong password", so nobody can probe which emails exist.
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Wrong email or password"));
-        return token(user);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Wrong email or password");
+        }
+        throttle.loginSucceeded(email);
+        return token(found.get());
     }
 
     private TokenResponse token(AppUser user) {
