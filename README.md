@@ -12,6 +12,10 @@ It stores your plan, bills and expenses in a database, behind a login.
 
 The database is a file in `./data` (H2). Delete that folder to start empty.
 
+Open http://localhost:8080/ for the web dashboard: sign in with your app account to see today's limit,
+this month vs the plan, a month-by-month chart, spending by category and recent expenses. It is three
+plain files in `src/main/resources/static` (no frameworks); the login token stays in the tab's sessionStorage.
+
 Try it:
 
 ```bash
@@ -41,6 +45,7 @@ curl "localhost:8080/api/expenses/months/2026-11?zone=Asia/Phnom_Penh" -H "Autho
 | GET | `/api/expenses/months/{2026-11}?zone=…` | Month totals: living, bills, engagement, per category |
 | GET | `/api/sync?since=…` | Everything changed since the last sync, including deletions |
 | GET | `/actuator/health` | Is the server up? (no login needed) |
+| GET | `/` | Web dashboard (static page, no login needed to load it; data needs sign-in) |
 
 Money is always whole cents: `125` = $1.25.
 

@@ -5,11 +5,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.forwardedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
 import java.util.UUID;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -49,6 +53,36 @@ class ApiTest {
     void apiNeedsALoginToken() throws Exception {
         mvc.perform(get("/api/bills")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/bills").header("Authorization", "Bearer not-a-real-token")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void dashboardFilesAreServedWithoutATokenAndWithSecurityHeaders() throws Exception {
+        mvc.perform(get("/index.html"))
+            .andExpect(status().isOk())
+            .andExpect(content().string(Matchers.containsString("<script src=\"/app.js\"")))
+            .andExpect(header().string("Content-Security-Policy", Matchers.allOf(
+                Matchers.containsString("script-src 'self'"),
+                Matchers.containsString("style-src 'self'"),
+                Matchers.containsString("connect-src 'self'"),
+                Matchers.containsString("frame-ancestors 'none'"),
+                Matchers.not(Matchers.containsString("unsafe-inline")))))
+            .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+            .andExpect(header().string("X-Frame-Options", "DENY"))
+            .andExpect(header().string("Referrer-Policy", "no-referrer"));
+        mvc.perform(get("/app.js")).andExpect(status().isOk());
+        mvc.perform(get("/app.css")).andExpect(status().isOk());
+        mvc.perform(get("/favicon.svg")).andExpect(status().isOk());
+        // "/" shows the same page (Spring forwards it to index.html).
+        mvc.perform(get("/")).andExpect(status().isOk()).andExpect(forwardedUrl("index.html"));
+    }
+
+    @Test
+    void openingTheDashboardDoesNotOpenTheApi() throws Exception {
+        for (String path : new String[] {"/api/sync", "/api/settings", "/api/bills", "/api/expenses/months/2026-11",
+                                         "/api/expenses?from=2026-11-01T00:00:00Z&to=2026-12-01T00:00:00Z"}) {
+            mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        }
+        mvc.perform(get("/some-other-file.txt")).andExpect(status().isUnauthorized());
     }
 
     @Test

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
+  <title>Daily Budget</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/app.css">
+  <!-- All logic lives in app.js. The Content-Security-Policy header blocks inline scripts. -->
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="glow glow-violet"></div>
+  <div class="glow glow-teal"></div>
+  <div class="glow glow-pink"></div>
+
+  <main class="wrap">
+    <!-- Login -->
+    <section id="login-view" class="card login" hidden>
+      <h1 class="brand">Daily Budget</h1>
+      <p class="muted">Sign in with your app account.</p>
+      <form id="login-form" autocomplete="on">
+        <label>Email
+          <input id="email" type="email" name="email" autocomplete="username" required maxlength="254">
+        </label>
+        <label>Password
+          <input id="password" type="password" name="password" autocomplete="current-password" required minlength="10" maxlength="72">
+        </label>
+        <button id="login-button" class="btn primary" type="submit">Sign in</button>
+        <p id="login-error" class="error" role="alert" hidden></p>
+      </form>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="dash-view" hidden>
+      <header class="top">
+        <h1 class="brand">Daily Budget</h1>
+        <div class="top-actions">
+          <button id="refresh-button" class="btn ghost" type="button">Refresh</button>
+          <button id="logout-button" class="btn ghost" type="button">Sign out</button>
+        </div>
+      </header>
+      <p id="dash-status" class="muted small" role="status"></p>
+
+      <div class="card today">
+        <div class="card-head">
+          <h2>Today</h2>
+          <span id="today-date" class="muted small"></span>
+        </div>
+        <div class="today-grid">
+          <div class="stat">
+            <span class="label">Daily limit</span>
+            <span id="today-limit" class="num big accent">–</span>
+          </div>
+          <div class="stat">
+            <span class="label">Spent</span>
+            <span id="today-spent" class="num big">–</span>
+          </div>
+          <div class="stat">
+            <span class="label">Left</span>
+            <span id="today-left" class="num big">–</span>
+          </div>
+        </div>
+        <p id="today-note" class="muted small"></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>This month</h2>
+          <span id="month-name" class="muted small"></span>
+        </div>
+        <div id="month-split" class="split"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Month by month</h2>
+          <div class="legend small">
+            <span><i class="dot living"></i>Living</span>
+            <span><i class="dot bills"></i>Bills</span>
+            <span><i class="dot engagement"></i>Engagement</span>
+            <span><i class="dash"></i>Plan</span>
+          </div>
+        </div>
+        <div id="month-chart" class="chart"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>By category</h2>
+          <select id="category-month" aria-label="Month"></select>
+        </div>
+        <div id="category-list" class="cats"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Recent expenses</h2>
+        </div>
+        <div class="table-wrap">
+          <table class="expenses">
+            <thead>
+              <tr><th>Date</th><th>Category</th><th>Note</th><th class="right">Amount</th></tr>
+            </thead>
+            <tbody id="expense-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
