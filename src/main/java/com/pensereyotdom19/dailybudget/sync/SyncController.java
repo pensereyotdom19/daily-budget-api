@@ -11,6 +11,8 @@ import com.pensereyotdom19.dailybudget.recurring.RecurringDtos.RecurringResponse
 import com.pensereyotdom19.dailybudget.recurring.RecurringService;
 import com.pensereyotdom19.dailybudget.settings.SettingsDtos.SettingsResponse;
 import com.pensereyotdom19.dailybudget.settings.SettingsService;
+import com.pensereyotdom19.dailybudget.subscription.SubscriptionDtos.SubscriptionResponse;
+import com.pensereyotdom19.dailybudget.subscription.SubscriptionService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -35,15 +37,18 @@ public class SyncController {
     private final ExpenseService expenses;
     private final IncomeService incomes;
     private final RecurringService recurring;
+    private final SubscriptionService subscriptions;
     private final Clock clock;
 
     public SyncController(SettingsService settings, BillService bills, ExpenseService expenses,
-                          IncomeService incomes, RecurringService recurring, Clock clock) {
+                          IncomeService incomes, RecurringService recurring,
+                          SubscriptionService subscriptions, Clock clock) {
         this.settings = settings;
         this.bills = bills;
         this.expenses = expenses;
         this.incomes = incomes;
         this.recurring = recurring;
+        this.subscriptions = subscriptions;
         this.clock = clock;
     }
 
@@ -57,10 +62,12 @@ public class SyncController {
             bills.changedSince(userId, since),
             expenses.changedSince(userId, since),
             incomes.changedSince(userId, since),
-            recurring.changedSince(userId, since));
+            recurring.changedSince(userId, since),
+            subscriptions.changedSince(userId, since));
     }
 
     public record Changes(Instant serverTime, SettingsResponse settings,
                           List<BillResponse> bills, List<ExpenseResponse> expenses,
-                          List<IncomeResponse> incomes, List<RecurringResponse> recurring) {}
+                          List<IncomeResponse> incomes, List<RecurringResponse> recurring,
+                          List<SubscriptionResponse> subscriptions) {}
 }

@@ -32,7 +32,7 @@
 
   const $ = (id) => document.getElementById(id);
 
-  let state = null;       // { plan, planMonths, bills, expenses } after loading
+  let state = null;       // { plan, planMonths, bills, expenses, subscriptions } after loading
   let resizeTimer = null;
 
   // ---------- small helpers ----------
@@ -238,6 +238,10 @@
         expenses: (sync.expenses || []).filter((e) => !e.deleted)
           .map((e) => Object.assign({}, e, { at: new Date(e.spentAt) }))
           .sort((a, b) => b.at - a.at),
+        // Only active, not deleted subscriptions, soonest renewal first.
+        subscriptions: (sync.subscriptions || []).filter((s) => !s.deleted && s.active)
+          .map((s) => Object.assign({}, s, { renews: new Date(s.nextRenewal) }))
+          .sort((a, b) => a.renews - b.renews),
       };
       renderAll();
       status.textContent = (sync.settings ? '' : 'No plan saved yet, showing the default plan. ')
@@ -312,6 +316,7 @@
     renderMonth();
     renderChart();
     fillMonthSelect();
+    renderSubscriptions();
     renderRecent();
   }
 
@@ -491,6 +496,33 @@
       + ' · Engagement ' + money(data.engagementCents)));
     total.appendChild(el('span', 'num', money(data.totalCents)));
     list.replaceChildren(...rows, total);
+  }
+
+  /**
+   * Active subscriptions with price, cycle and next renewal (in the browser's time zone),
+   * plus roughly what they cost per month: a yearly one counts as its price ÷ 12.
+   */
+  function renderSubscriptions() {
+    const list = $('subs-list');
+    const subs = state.subscriptions;
+    let perMonth = 0;   // not rounded yet: rounded to whole cents once, at the end
+    for (const s of subs) perMonth += s.cycle === 'yearly' ? s.amountCents / 12 : s.amountCents;
+    $('subs-total').textContent = subs.length ? '≈ ' + money(Math.round(perMonth)) + ' / month' : '';
+    if (subs.length === 0) {
+      list.replaceChildren(el('p', 'empty', 'No active subscriptions.'));
+      return;
+    }
+    list.replaceChildren(...subs.map((s) => {
+      const row = el('div', 'sub-row');
+      const left = el('div', 'sub-main');
+      left.appendChild(el('span', 'sub-name', s.name));   // textContent: names can never become HTML
+      left.appendChild(el('span', 'muted small',
+        (s.cycle === 'yearly' ? 'Yearly' : 'Monthly') + ' · renews '
+        + s.renews.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })));
+      row.appendChild(left);
+      row.appendChild(el('span', 'num', money(s.amountCents)));
+      return row;
+    }));
   }
 
   function renderRecent() {

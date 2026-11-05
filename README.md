@@ -44,6 +44,8 @@ curl "localhost:8080/api/expenses/months/2026-11?zone=Asia/Phnom_Penh" -H "Autho
 | GET | `/api/expenses?from=…&to=…` | Expenses between two times, newest first |
 | PUT / DELETE | `/api/expenses/{id}` | Save / delete one expense |
 | GET | `/api/expenses/months/{2026-11}?zone=…` | Month totals: living, bills, engagement, per category |
+| GET | `/api/subscriptions` | Active and paused subscriptions, soonest renewal first |
+| PUT / DELETE | `/api/subscriptions/{id}` | Save / delete one subscription (`cycle`: `monthly` or `yearly`) |
 | GET | `/api/sync?since=…` | Everything changed since the last sync, including deletions |
 | GET | `/actuator/health` | Is the server up? (no login needed) |
 | GET | `/` | Web dashboard (static page, no login needed to load it; data needs sign-in) |
@@ -71,6 +73,7 @@ Entity       a Java class that maps to one table row
 | `settings/` | The plan (one row per user) |
 | `bill/` | Bills, with due and paid months in their own tables |
 | `expense/` | Expenses, categories, month totals (a hand-written JPQL query) |
+| `subscription/` | Subscriptions that renew monthly or yearly |
 | `sync/` | One endpoint the phone calls to catch up |
 | `resources/db/migration/` | The database tables, as SQL run by Flyway |
 

@@ -52,6 +52,7 @@ class ApiTest {
     @Test
     void apiNeedsALoginToken() throws Exception {
         mvc.perform(get("/api/bills")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/subscriptions")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/bills").header("Authorization", "Bearer not-a-real-token")).andExpect(status().isUnauthorized());
     }
 
@@ -288,6 +289,102 @@ class ApiTest {
         mvc.perform(put("/api/incomes/" + id).header("Authorization", other).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"amountCents\":1,\"target\":\"living\",\"note\":\"\",\"receivedAt\":\"2026-11-04T03:00:00Z\"}"))
             .andExpect(status().isConflict());
+    }
+
+    private static String subscriptionJson(String name, long cents, String cycle, String nextRenewal, int anchorDay) {
+        return "{\"amountCents\":" + cents + ",\"name\":\"" + name + "\",\"cycle\":\"" + cycle
+            + "\",\"nextRenewal\":\"" + nextRenewal + "\",\"anchorDay\":" + anchorDay
+            + ",\"startMonth\":\"2026-11\",\"active\":true}";
+    }
+
+    private org.springframework.test.web.servlet.ResultActions putSubscription(String token, UUID id, String json) throws Exception {
+        return mvc.perform(put("/api/subscriptions/" + id).header("Authorization", token)
+            .contentType(MediaType.APPLICATION_JSON).content(json));
+    }
+
+    @Test
+    void subscriptionsAreSavedListedBySoonestRenewalAndSyncIncludingDeletions() throws Exception {
+        String token = register(unique());
+        UUID netflix = UUID.randomUUID();
+        UUID icloud = UUID.randomUUID();
+        putSubscription(token, netflix, subscriptionJson(" Netflix ", 1599, "monthly", "2026-11-20T00:00:00Z", 20))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(netflix.toString()))
+            .andExpect(jsonPath("$.name").value("Netflix"))
+            .andExpect(jsonPath("$.amountCents").value(1599))
+            .andExpect(jsonPath("$.cycle").value("monthly"))
+            .andExpect(jsonPath("$.nextRenewal").value("2026-11-20T00:00:00Z"))
+            .andExpect(jsonPath("$.anchorDay").value(20))
+            .andExpect(jsonPath("$.startMonth").value("2026-11"))
+            .andExpect(jsonPath("$.active").value(true))
+            .andExpect(jsonPath("$.deleted").value(false));
+        putSubscription(token, icloud, subscriptionJson("iCloud", 3588, "yearly", "2026-11-08T00:00:00Z", 8))
+            .andExpect(status().isOk());
+        // Saving the same id again replaces it instead of making a second one.
+        putSubscription(token, icloud, subscriptionJson("iCloud+", 3588, "yearly", "2026-11-08T00:00:00Z", 8))
+            .andExpect(status().isOk());
+
+        mvc.perform(get("/api/subscriptions").header("Authorization", token))
+            .andExpect(jsonPath("$.length()").value(2))
+            .andExpect(jsonPath("$[0].name").value("iCloud+"))
+            .andExpect(jsonPath("$[1].name").value("Netflix"));
+
+        String first = mvc.perform(get("/api/sync").header("Authorization", token))
+            .andExpect(jsonPath("$.subscriptions.length()").value(2))
+            .andReturn().getResponse().getContentAsString();
+        String since = JsonPath.read(first, "$.serverTime");
+
+        Thread.sleep(5);
+        mvc.perform(delete("/api/subscriptions/" + netflix).header("Authorization", token)).andExpect(status().isNoContent());
+        mvc.perform(get("/api/sync").header("Authorization", token).param("since", since))
+            .andExpect(jsonPath("$.subscriptions.length()").value(1))
+            .andExpect(jsonPath("$.subscriptions[0].id").value(netflix.toString()))
+            .andExpect(jsonPath("$.subscriptions[0].deleted").value(true));
+        mvc.perform(get("/api/subscriptions").header("Authorization", token))
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].id").value(icloud.toString()));
+    }
+
+    @Test
+    void badSubscriptionsAreRefused() throws Exception {
+        String token = register(unique());
+        UUID id = UUID.randomUUID();
+        putSubscription(token, id, subscriptionJson("Gym", 2000, "weekly", "2026-11-20T00:00:00Z", 20))
+            .andExpect(status().isBadRequest());
+        putSubscription(token, id, subscriptionJson("Gym", 2000, "monthly", "2026-11-20T00:00:00Z", 0))
+            .andExpect(status().isBadRequest());
+        putSubscription(token, id, subscriptionJson("Gym", 2000, "monthly", "2026-11-20T00:00:00Z", 32))
+            .andExpect(status().isBadRequest());
+        putSubscription(token, id, subscriptionJson("   ", 2000, "monthly", "2026-11-20T00:00:00Z", 20))
+            .andExpect(status().isBadRequest());
+        putSubscription(token, id, subscriptionJson("Gym", 0, "monthly", "2026-11-20T00:00:00Z", 20))
+            .andExpect(status().isBadRequest());
+        putSubscription(token, id, "{\"amountCents\":2000,\"name\":\"Gym\",\"cycle\":\"monthly\",\"anchorDay\":20,"
+                + "\"startMonth\":\"2026-11\",\"active\":true}")
+            .andExpect(status().isBadRequest()); // nextRenewal missing
+        mvc.perform(get("/api/subscriptions").header("Authorization", token)).andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void othersCannotSeeDeleteOrOverwriteSubscriptions() throws Exception {
+        String alice = register(unique());
+        String bob = register(unique());
+        UUID id = UUID.randomUUID();
+        putSubscription(alice, id, subscriptionJson("Spotify", 1199, "monthly", "2026-11-12T00:00:00Z", 12))
+            .andExpect(status().isOk());
+
+        mvc.perform(get("/api/subscriptions").header("Authorization", bob)).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(get("/api/sync").header("Authorization", bob)).andExpect(jsonPath("$.subscriptions.length()").value(0));
+        mvc.perform(delete("/api/subscriptions/" + id).header("Authorization", bob)).andExpect(status().isNotFound());
+        putSubscription(bob, id, subscriptionJson("Mine now", 1, "monthly", "2026-11-12T00:00:00Z", 12))
+            .andExpect(status().isConflict());
+        mvc.perform(delete("/api/subscriptions/" + UUID.randomUUID()).header("Authorization", alice))
+            .andExpect(status().isNotFound());
+
+        mvc.perform(get("/api/subscriptions").header("Authorization", alice))
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].name").value("Spotify"))
+            .andExpect(jsonPath("$[0].amountCents").value(1199));
     }
 
     @Test
