@@ -131,6 +131,30 @@ class ApiTest {
     }
 
     @Test
+    void billsKeepTheirDueDayAndRefuseImpossibleDays() throws Exception {
+        String token = register(unique());
+        UUID id = UUID.randomUUID();
+        mvc.perform(put("/api/bills/" + id).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name":"Electricity","amountCents":10000,"sortOrder":1,"dueMonths":["2026-11"],
+                     "paidMonths":[],"dueDay":15,"lastAutoMonth":"2026-10"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.dueDay").value(15))
+            .andExpect(jsonPath("$.lastAutoMonth").value("2026-10"));
+        mvc.perform(get("/api/sync").header("Authorization", token))
+            .andExpect(jsonPath("$.bills[0].dueDay").value(15));
+        mvc.perform(put("/api/bills/" + id).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Electricity\",\"amountCents\":10000,\"sortOrder\":1,\"dueMonths\":[],\"paidMonths\":[],\"dueDay\":32}"))
+            .andExpect(status().isBadRequest());
+        // No due day means "tick by hand".
+        mvc.perform(put("/api/bills/" + id).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Electricity\",\"amountCents\":10000,\"sortOrder\":1,\"dueMonths\":[],\"paidMonths\":[]}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.dueDay").doesNotExist());
+    }
+
+    @Test
     void billsCanBeSavedRepeatedlyAndDeleted() throws Exception {
         String token = register(unique());
         UUID id = UUID.randomUUID();

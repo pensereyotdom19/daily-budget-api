@@ -30,7 +30,8 @@ public class BillService {
     @Transactional
     public BillResponse put(UUID userId, UUID id, BillRequest r) {
         Bill bill = repo.findById(id).map(b -> owned(b, userId)).orElseGet(() -> new Bill(id, userId));
-        bill.update(r.name().trim(), r.amountCents(), r.sortOrder(), r.dueMonths(), r.paidMonths(), clock.instant());
+        bill.update(r.name().trim(), r.amountCents(), r.sortOrder(), r.dueMonths(), r.paidMonths(),
+            r.dueDay(), r.lastAutoMonth(), clock.instant());
         return BillResponse.from(repo.save(bill));
     }
 

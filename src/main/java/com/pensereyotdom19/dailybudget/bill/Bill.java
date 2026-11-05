@@ -43,6 +43,14 @@ public class Bill {
     @Column(name = "month_key")
     private Set<String> paidMonths = new HashSet<>();
 
+    /** Day of the month it is paid automatically (1–31), or null to tick it by hand. */
+    @Column(name = "due_day")
+    private Integer dueDay;
+
+    /** The last month the app paid it automatically ("2026-11"). */
+    @Column(name = "last_auto_month")
+    private String lastAutoMonth;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -63,10 +71,15 @@ public class Bill {
     public int getSortOrder() { return sortOrder; }
     public Set<String> getDueMonths() { return dueMonths; }
     public Set<String> getPaidMonths() { return paidMonths; }
+    public Integer getDueDay() { return dueDay; }
+    public String getLastAutoMonth() { return lastAutoMonth; }
     public Instant getUpdatedAt() { return updatedAt; }
     public Instant getDeletedAt() { return deletedAt; }
 
-    public void update(String name, long amountCents, int sortOrder, Set<String> due, Set<String> paid, Instant now) {
+    public void update(String name, long amountCents, int sortOrder, Set<String> due, Set<String> paid,
+                       Integer dueDay, String lastAutoMonth, Instant now) {
+        this.dueDay = dueDay;
+        this.lastAutoMonth = lastAutoMonth;
         this.name = name;
         this.amountCents = amountCents;
         this.sortOrder = sortOrder;
