@@ -8,18 +8,15 @@
   <title>Daily Budget</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/app.css">
-  <!-- All logic lives in app.js. The Content-Security-Policy header blocks inline scripts. -->
+  <!-- All logic lives in app.js. The Content-Security-Policy header blocks inline scripts
+       and inline style="" attributes, so every style is in app.css. -->
   <script src="/app.js" defer></script>
 </head>
 <body>
-  <div class="glow glow-violet"></div>
-  <div class="glow glow-teal"></div>
-  <div class="glow glow-pink"></div>
-
-  <main class="wrap">
-    <!-- Login -->
-    <section id="login-view" class="card login" hidden>
-      <h1 class="brand">Daily Budget</h1>
+  <!-- Login -->
+  <main id="login-view" class="login-wrap" hidden>
+    <section class="glass login">
+      <div class="brand"><span class="logo" aria-hidden="true">$</span><span>Daily Budget</span></div>
       <p class="muted">Sign in with your app account.</p>
       <form id="login-form" autocomplete="on">
         <label>Email
@@ -28,85 +25,136 @@
         <label>Password
           <input id="password" type="password" name="password" autocomplete="current-password" required minlength="10" maxlength="72">
         </label>
-        <button id="login-button" class="btn primary" type="submit">Sign in</button>
+        <button id="login-button" class="btn dark wide" type="submit">Sign in</button>
         <p id="login-error" class="error" role="alert" hidden></p>
       </form>
     </section>
+  </main>
 
-    <!-- Dashboard -->
-    <section id="dash-view" hidden>
+  <!-- Dashboard: a side menu and the main area -->
+  <div id="dash-view" class="shell" hidden>
+    <aside class="side">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">$</span>
+        <span class="brand-text"><b>Daily Budget</b><small>Your money</small></span>
+      </div>
+
+      <nav class="nav" aria-label="Sections">
+        <h4>Dashboard</h4>
+        <a href="#overview" class="on">Overview</a>
+        <a href="#months">Month by month</a>
+        <a href="#categories">By category</a>
+        <h4>Money</h4>
+        <a href="#expenses">Expenses <b id="nav-expenses"></b></a>
+        <a href="#subscriptions">Subscriptions <b id="nav-subs"></b></a>
+        <h4>Account</h4>
+        <button id="logout-button" type="button">Sign out</button>
+        <button id="logout-all-button" type="button">Sign out everywhere</button>
+      </nav>
+
+      <div class="side-plan">
+        <span>Living money this month</span>
+        <div class="bar thin"><span id="side-plan-fill" class="fill-sun"></span></div>
+        <span id="side-plan-text"></span>
+      </div>
+    </aside>
+
+    <main class="main">
       <header class="top">
-        <h1 class="brand">Daily Budget</h1>
-        <div class="top-actions">
-          <button id="refresh-button" class="btn ghost" type="button">Refresh</button>
-          <button id="logout-button" class="btn ghost" type="button">Sign out</button>
-          <button id="logout-all-button" class="btn ghost" type="button">Sign out everywhere</button>
-        </div>
+        <input id="search" class="search" type="search" placeholder="Search expenses, notes, categories…" aria-label="Search recent expenses" maxlength="80">
+        <button id="refresh-button" class="btn soft" type="button">Refresh</button>
       </header>
-      <p id="dash-status" class="muted small" role="status"></p>
+      <p id="dash-status" class="status small" role="status"></p>
 
-      <div class="card today">
-        <div class="card-head">
-          <h2>Today</h2>
-          <span id="today-date" class="muted small"></span>
-        </div>
-        <div class="today-grid">
-          <div class="stat">
-            <span class="label">Daily limit</span>
-            <span id="today-limit" class="num big accent">–</span>
-          </div>
-          <div class="stat">
-            <span class="label">Spent</span>
-            <span id="today-spent" class="num big">–</span>
-          </div>
-          <div class="stat">
-            <span class="label">Left</span>
-            <span id="today-left" class="num big">–</span>
+      <!-- Greeting, month chart and this month's split -->
+      <section id="overview" class="glass hero">
+        <div class="head">
+          <div>
+            <h1 id="greeting">Hello</h1>
+            <p id="today-date" class="muted small"></p>
           </div>
         </div>
-        <p id="today-note" class="muted small"></p>
-      </div>
 
-      <div class="card">
-        <div class="card-head">
-          <h2>This month</h2>
-          <span id="month-name" class="muted small"></span>
-        </div>
-        <div id="month-split" class="split"></div>
-      </div>
+        <div class="hero-grid">
+          <div id="months" class="glass inner">
+            <div class="head">
+              <div><h2>Month by month</h2><p class="muted small">Every month of your plan</p></div>
+              <div class="legend small">
+                <span><i class="dot living"></i>Living</span>
+                <span><i class="dot bills"></i>Bills</span>
+                <span><i class="dot engagement"></i>Engagement</span>
+                <span><i class="dash"></i>Plan</span>
+              </div>
+            </div>
+            <div id="month-chart" class="chart"></div>
+          </div>
 
-      <div class="card">
-        <div class="card-head">
-          <h2>Month by month</h2>
-          <div class="legend small">
-            <span><i class="dot living"></i>Living</span>
-            <span><i class="dot bills"></i>Bills</span>
-            <span><i class="dot engagement"></i>Engagement</span>
-            <span><i class="dash"></i>Plan</span>
+          <div class="glass inner">
+            <div class="head">
+              <div><h2>This month</h2><p id="month-name" class="muted small"></p></div>
+            </div>
+            <div class="donut-row">
+              <div id="month-donut" class="donut"></div>
+              <div id="month-split" class="split"></div>
+            </div>
           </div>
         </div>
-        <div id="month-chart" class="chart"></div>
-      </div>
+      </section>
 
-      <div class="card">
-        <div class="card-head">
-          <h2>By category</h2>
-          <select id="category-month" aria-label="Month"></select>
+      <!-- Today in four tiles -->
+      <section class="tiles" aria-label="Today">
+        <div class="glass tile">
+          <span class="ic" aria-hidden="true">$</span>
+          <span id="today-limit" class="num">–</span>
+          <span class="tile-title">Today's limit</span>
+          <span class="muted small">stays the same all day</span>
         </div>
-        <div id="category-list" class="cats"></div>
-      </div>
-
-      <div class="card">
-        <div class="card-head">
-          <h2>Subscriptions</h2>
-          <span id="subs-total" class="muted small"></span>
+        <div class="glass tile">
+          <span class="ic" aria-hidden="true">−</span>
+          <span id="today-spent" class="num">–</span>
+          <span class="tile-title">Spent today</span>
+          <span id="today-count" class="muted small"></span>
         </div>
-        <div id="subs-list" class="subs"></div>
+        <div class="glass tile">
+          <span class="ic" aria-hidden="true">=</span>
+          <span id="today-left" class="num">–</span>
+          <span class="tile-title">Left today</span>
+          <span id="today-chip" class="chip"></span>
+        </div>
+        <div class="glass tile">
+          <span class="ic" aria-hidden="true">◷</span>
+          <span id="month-left" class="num">–</span>
+          <span class="tile-title">Living money left</span>
+          <span id="today-note" class="muted small"></span>
+        </div>
+      </section>
+
+      <div class="two">
+        <section id="categories" class="glass card">
+          <div class="head">
+            <div><h2>By category</h2><p class="muted small">Biggest first</p></div>
+            <select id="category-month" aria-label="Month"></select>
+          </div>
+          <div id="category-list" class="cats"></div>
+        </section>
+
+        <section id="subscriptions" class="glass card">
+          <div class="head">
+            <div><h2>Subscriptions</h2><p id="subs-total" class="muted small"></p></div>
+          </div>
+          <div id="subs-list" class="subs"></div>
+        </section>
       </div>
 
-      <div class="card">
-        <div class="card-head">
-          <h2>Recent expenses</h2>
+      <section id="expenses" class="glass card">
+        <div class="head">
+          <div><h2>Recent expenses</h2><p class="muted small">Synced from your iPhone</p></div>
+          <div id="part-tabs" class="tabs" role="group" aria-label="Show">
+            <button type="button" class="on" data-part="all" aria-pressed="true">All</button>
+            <button type="button" data-part="living" aria-pressed="false">Living</button>
+            <button type="button" data-part="bills" aria-pressed="false">Bills</button>
+            <button type="button" data-part="engagement" aria-pressed="false">Engagement</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table class="expenses">
@@ -116,8 +164,8 @@
             <tbody id="expense-rows"></tbody>
           </table>
         </div>
-      </div>
-    </section>
-  </main>
+      </section>
+    </main>
+  </div>
 </body>
 </html>

@@ -34,6 +34,7 @@
 
   let state = null;       // { plan, planMonths, bills, expenses, subscriptions } after loading
   let resizeTimer = null;
+  let recentPart = 'all'; // which pill is on above Recent expenses
 
   // ---------- small helpers ----------
 
@@ -322,14 +323,28 @@
 
   function renderToday() {
     const t = today();
-    $('today-date').textContent = t.now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const hour = t.now.getHours();
+    $('greeting').textContent = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    $('today-date').textContent = t.now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+      + ' · ' + t.daysLeft + (t.daysLeft === 1 ? ' day' : ' days') + ' left this month';
     $('today-limit').textContent = money(t.limit);
     $('today-spent').textContent = money(t.spentToday);
+
+    let count = 0;
+    for (const e of state.expenses) if (isLiving(e.category) && sameLocalDay(e.at, t.now)) count++;
+    $('today-count').textContent = count === 0 ? 'nothing yet' : count + (count === 1 ? ' expense' : ' expenses');
+
     const left = $('today-left');
     left.textContent = money(t.left);
     left.classList.toggle('negative', t.left < 0);
-    $('today-note').textContent = money(Math.max(0, t.leftThisMonth)) + ' living money left this month over '
-      + t.daysLeft + (t.daysLeft === 1 ? ' day' : ' days') + ' (today included).';
+    const chip = $('today-chip');
+    chip.className = 'chip ' + (t.left < 0 ? 'over' : 'good');
+    chip.textContent = t.left < 0 ? 'over today' : 'on budget';
+
+    const monthLeft = $('month-left');
+    monthLeft.textContent = money(t.leftThisMonth);
+    monthLeft.classList.toggle('negative', t.leftThisMonth < 0);
+    $('today-note').textContent = 'for ' + t.daysLeft + (t.daysLeft === 1 ? ' day' : ' days') + ', today included';
   }
 
   function splitRow(label, spent, plan, fillClass, detail) {
@@ -365,10 +380,40 @@
       splitRow('Engagement (whole plan)', engagementSoFar, plan.engagementCents, 'fill-engagement',
         'This month: ' + money(t.engagement)),
     );
-    const total = el('div', 'split-top');
-    total.appendChild(el('span', 'muted', 'Total this month'));
-    total.appendChild(el('span', 'num', money(t.living + t.bills + t.engagement)));
-    box.appendChild(total);
+    renderDonut(t);
+
+    // Side menu: how much of this month's living money is used, and a few counts.
+    const used = plan.livingMonthlyCents > 0 ? Math.min(100, (t.living / plan.livingMonthlyCents) * 100) : 0;
+    const fill = $('side-plan-fill');
+    fill.style.width = used.toFixed(1) + '%';
+    fill.className = t.living > plan.livingMonthlyCents ? 'fill-over' : 'fill-sun';
+    $('side-plan-text').textContent = money(t.living) + ' of ' + money(plan.livingMonthlyCents) + ' spent';
+    $('nav-expenses').textContent = state.expenses.length ? String(state.expenses.length) : '';
+    $('nav-subs').textContent = state.subscriptions.length ? String(state.subscriptions.length) : '';
+  }
+
+  /** A ring showing living / bills / engagement spent this month, with the total in the middle. */
+  function renderDonut(t) {
+    const total = t.living + t.bills + t.engagement;
+    const r = 15.915;   // circumference ≈ 100, so lengths are percentages
+    const svg = svgEl('svg', { viewBox: '0 0 42 42', role: 'img',
+      'aria-label': 'Spent this month: ' + money(total) });
+    svg.appendChild(svgEl('circle', { cx: 21, cy: 21, r, fill: 'none', stroke: 'rgba(15,26,46,0.08)', 'stroke-width': 5 }));
+    let start = 0;
+    const colors = { living: '#7FB6E0', bills: '#F5C542', engagement: '#3E8E63' };
+    for (const part of ['living', 'bills', 'engagement']) {
+      if (total <= 0 || t[part] <= 0) continue;
+      const pct = (t[part] / total) * 100;
+      svg.appendChild(svgEl('circle', { cx: 21, cy: 21, r, fill: 'none', stroke: colors[part], 'stroke-width': 5,
+        'stroke-dasharray': pct.toFixed(2) + ' ' + (100 - pct).toFixed(2),
+        'stroke-dashoffset': (25 - start).toFixed(2) }))
+        .appendChild(svgEl('title', {}, part + ': ' + money(t[part])));
+      start += pct;
+    }
+    svg.appendChild(svgEl('text', { x: 21, y: 22, 'text-anchor': 'middle', 'font-size': total >= 100000 ? 5 : 6,
+      'font-weight': 700, fill: '#0F1A2E' }, shortMoney(total)));
+    svg.appendChild(svgEl('text', { x: 21, y: 27, 'text-anchor': 'middle', 'font-size': 3, fill: '#4E6580' }, 'spent'));
+    $('month-donut').replaceChildren(svg);
   }
 
   /** Stacked bars per plan month (living, bills, engagement) with a dashed line for the plan (living + bills due). */
@@ -398,15 +443,15 @@
       const v = (niceMax / 4) * i;
       const yy = y(v);
       svg.appendChild(svgEl('line', { x1: pad.left, x2: width - pad.right, y1: yy, y2: yy,
-        stroke: 'rgba(255,255,255,0.08)', 'stroke-width': 1 }));
+        stroke: 'rgba(15,26,46,0.08)', 'stroke-width': 1 }));
       svg.appendChild(svgEl('text', { x: pad.left - 6, y: yy + 4, 'text-anchor': 'end',
-        'font-size': 11, fill: 'rgba(242,244,250,0.5)' }, shortMoney(v)));
+        'font-size': 11, fill: '#4E6580' }, shortMoney(v)));
     }
 
     const slot = innerW / rows.length;
     const barW = Math.min(46, slot * 0.6);
     const thisMonth = monthKeyOf(new Date());
-    const colors = { living: '#7CF2A0', bills: '#5FD0FF', engagement: '#C79BFF' };
+    const colors = { living: '#7FB6E0', bills: '#F5C542', engagement: '#3E8E63' };
 
     rows.forEach((r, i) => {
       const cx = pad.left + slot * i + slot / 2;
@@ -425,16 +470,16 @@
       // Plan marker
       const py = y(r.plan);
       svg.appendChild(svgEl('line', { x1: x - 4, x2: x + barW + 4, y1: py, y2: py,
-        stroke: 'rgba(255,255,255,0.75)', 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }))
+        stroke: 'rgba(15,26,46,0.6)', 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }))
         .appendChild(svgEl('title', {}, monthLabel(r.m, true) + ' plan: ' + money(r.plan)));
       // Total above the bar
       if (r.total > 0) {
         svg.appendChild(svgEl('text', { x: cx, y: Math.min(y(r.total), py) - 6, 'text-anchor': 'middle',
-          'font-size': 11, fill: 'rgba(242,244,250,0.85)' }, shortMoney(r.total)));
+          'font-size': 11, fill: '#0F1A2E' }, shortMoney(r.total)));
       }
       // Month label
       svg.appendChild(svgEl('text', { x: cx, y: height - 10, 'text-anchor': 'middle', 'font-size': 12,
-        fill: r.m === thisMonth ? '#7CF2A0' : 'rgba(242,244,250,0.6)',
+        fill: r.m === thisMonth ? '#0F1A2E' : '#4E6580',
         'font-weight': r.m === thisMonth ? 700 : 400 }, monthLabel(r.m, false)));
     });
 
@@ -527,10 +572,20 @@
 
   function renderRecent() {
     const body = $('expense-rows');
-    const recent = state.expenses.slice(0, RECENT_LIMIT); // already newest first, deleted ones removed
+    // The search box and the All / Living / Bills / Engagement pills narrow the list.
+    const query = $('search').value.trim().toLowerCase();
+    const matches = state.expenses.filter((e) => {   // already newest first, deleted ones removed
+      if (recentPart === 'living' && !isLiving(e.category)) return false;
+      if ((recentPart === 'bills' || recentPart === 'engagement') && e.category !== recentPart) return false;
+      if (!query) return true;
+      const name = (CATEGORY_NAMES[e.category] || e.category).toLowerCase();
+      return name.includes(query) || (e.note || '').toLowerCase().includes(query);
+    });
+    const recent = matches.slice(0, RECENT_LIMIT);
     if (recent.length === 0) {
       const tr = el('tr');
-      const td = el('td', 'empty', 'No expenses yet.');
+      const filtered = query || recentPart !== 'all';
+      const td = el('td', 'empty', filtered ? 'No expenses match.' : 'No expenses yet.');
       td.colSpan = 4;
       tr.appendChild(td);
       body.replaceChildren(tr);
@@ -540,7 +595,10 @@
       const tr = el('tr');
       tr.appendChild(el('td', '', e.at.toLocaleString('en-US',
         { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })));
-      tr.appendChild(el('td', '', CATEGORY_NAMES[e.category] || e.category));
+      const cat = el('td');
+      cat.appendChild(el('span', 'chip ' + (isLiving(e.category) ? 'good' : 'plain'),
+        CATEGORY_NAMES[e.category] || e.category));
+      tr.appendChild(cat);
       tr.appendChild(el('td', '', e.note || ''));   // textContent: notes can never become HTML
       tr.appendChild(el('td', 'num', money(e.amountCents)));
       return tr;
@@ -555,6 +613,24 @@
     $('logout-all-button').addEventListener('click', onLogoutAll);
     $('refresh-button').addEventListener('click', load);
     $('category-month').addEventListener('change', loadCategories);
+    $('search').addEventListener('input', () => { if (state) renderRecent(); });
+    $('part-tabs').addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-part]');
+      if (!button) return;
+      recentPart = button.dataset.part;
+      for (const b of $('part-tabs').querySelectorAll('button')) {
+        const on = b === button;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', String(on));
+      }
+      if (state) renderRecent();
+    });
+    // Side menu: mark the link you clicked (the page scrolls to that section by itself).
+    for (const link of document.querySelectorAll('.nav a')) {
+      link.addEventListener('click', () => {
+        for (const other of document.querySelectorAll('.nav a')) other.classList.toggle('on', other === link);
+      });
+    }
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => { if (state) renderChart(); }, 150);
