@@ -398,21 +398,20 @@
     const r = 15.915;   // circumference ≈ 100, so lengths are percentages
     const svg = svgEl('svg', { viewBox: '0 0 42 42', role: 'img',
       'aria-label': 'Spent this month: ' + money(total) });
-    svg.appendChild(svgEl('circle', { cx: 21, cy: 21, r, fill: 'none', stroke: 'rgba(15,26,46,0.08)', 'stroke-width': 5 }));
+    svg.appendChild(svgEl('circle', { cx: 21, cy: 21, r, fill: 'none', class: 'ch-track', 'stroke-width': 5 }));
     let start = 0;
-    const colors = { living: '#7FB6E0', bills: '#F5C542', engagement: '#3E8E63' };
     for (const part of ['living', 'bills', 'engagement']) {
       if (total <= 0 || t[part] <= 0) continue;
       const pct = (t[part] / total) * 100;
-      svg.appendChild(svgEl('circle', { cx: 21, cy: 21, r, fill: 'none', stroke: colors[part], 'stroke-width': 5,
+      svg.appendChild(svgEl('circle', { cx: 21, cy: 21, r, fill: 'none', class: 'ring-' + part, 'stroke-width': 5,
         'stroke-dasharray': pct.toFixed(2) + ' ' + (100 - pct).toFixed(2),
         'stroke-dashoffset': (25 - start).toFixed(2) }))
         .appendChild(svgEl('title', {}, part + ': ' + money(t[part])));
       start += pct;
     }
     svg.appendChild(svgEl('text', { x: 21, y: 22, 'text-anchor': 'middle', 'font-size': total >= 100000 ? 5 : 6,
-      'font-weight': 700, fill: '#0F1A2E' }, shortMoney(total)));
-    svg.appendChild(svgEl('text', { x: 21, y: 27, 'text-anchor': 'middle', 'font-size': 3, fill: '#4E6580' }, 'spent'));
+      'font-weight': 700, class: 'ch-ink' }, shortMoney(total)));
+    svg.appendChild(svgEl('text', { x: 21, y: 27, 'text-anchor': 'middle', 'font-size': 3, class: 'ch-sub' }, 'spent'));
     $('month-donut').replaceChildren(svg);
   }
 
@@ -443,15 +442,14 @@
       const v = (niceMax / 4) * i;
       const yy = y(v);
       svg.appendChild(svgEl('line', { x1: pad.left, x2: width - pad.right, y1: yy, y2: yy,
-        stroke: 'rgba(15,26,46,0.08)', 'stroke-width': 1 }));
+        class: 'ch-grid', 'stroke-width': 1 }));
       svg.appendChild(svgEl('text', { x: pad.left - 6, y: yy + 4, 'text-anchor': 'end',
-        'font-size': 11, fill: '#4E6580' }, shortMoney(v)));
+        'font-size': 11, class: 'ch-sub' }, shortMoney(v)));
     }
 
     const slot = innerW / rows.length;
     const barW = Math.min(46, slot * 0.6);
     const thisMonth = monthKeyOf(new Date());
-    const colors = { living: '#7FB6E0', bills: '#F5C542', engagement: '#3E8E63' };
 
     rows.forEach((r, i) => {
       const cx = pad.left + slot * i + slot / 2;
@@ -463,23 +461,23 @@
         const top = y(base + v);
         const h = y(base) - top;
         svg.appendChild(svgEl('rect', { x, y: top, width: barW, height: Math.max(1, h), rx: 3,
-          fill: colors[part], opacity: 0.9 }, undefined))
+          class: 'bar-' + part }, undefined))
           .appendChild(svgEl('title', {}, monthLabel(r.m, true) + ' ' + part + ': ' + money(v)));
         base += v;
       }
       // Plan marker
       const py = y(r.plan);
       svg.appendChild(svgEl('line', { x1: x - 4, x2: x + barW + 4, y1: py, y2: py,
-        stroke: 'rgba(15,26,46,0.6)', 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }))
+        class: 'ch-plan', 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }))
         .appendChild(svgEl('title', {}, monthLabel(r.m, true) + ' plan: ' + money(r.plan)));
       // Total above the bar
       if (r.total > 0) {
         svg.appendChild(svgEl('text', { x: cx, y: Math.min(y(r.total), py) - 6, 'text-anchor': 'middle',
-          'font-size': 11, fill: '#0F1A2E' }, shortMoney(r.total)));
+          'font-size': 11, class: 'ch-ink' }, shortMoney(r.total)));
       }
       // Month label
       svg.appendChild(svgEl('text', { x: cx, y: height - 10, 'text-anchor': 'middle', 'font-size': 12,
-        fill: r.m === thisMonth ? '#0F1A2E' : '#4E6580',
+        class: r.m === thisMonth ? 'ch-ink' : 'ch-sub',
         'font-weight': r.m === thisMonth ? 700 : 400 }, monthLabel(r.m, false)));
     });
 
